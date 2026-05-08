@@ -61,6 +61,76 @@ har_analyzer capture.har slow --limit 5
 har_analyzer capture.har search "login"
 ```
 
+## LLM Agent Skill Setup
+
+This repo ships a reusable skill file that teaches LLM coding agents how to use `har_analyzer` for HAR analysis. All three tools use the same `SKILL.md` format (YAML frontmatter + markdown), just in different directories.
+
+### Claude Code
+
+Skill is already in place at `.claude/skills/har-analyze/SKILL.md`. Auto-discovered, no setup needed.
+
+**Global install (for all projects):**
+
+```bash
+mkdir -p ~/.claude/skills/har-analyze
+cp .claude/skills/har-analyze/SKILL.md ~/.claude/skills/har-analyze/SKILL.md
+```
+
+### OpenAI Codex CLI
+
+Codex scans `.agents/skills/` for skill directories.
+
+**Project-level:**
+
+```bash
+mkdir -p .agents/skills/har-analyze
+cp .claude/skills/har-analyze/SKILL.md .agents/skills/har-analyze/SKILL.md
+```
+
+**Global install:**
+
+```bash
+mkdir -p ~/.agents/skills/har-analyze
+cp .claude/skills/har-analyze/SKILL.md ~/.agents/skills/har-analyze/SKILL.md
+```
+
+### Google Gemini CLI
+
+Gemini scans `.gemini/skills/` (also accepts `.agents/skills/` as an alias).
+
+**Project-level:**
+
+```bash
+mkdir -p .gemini/skills/har-analyze
+cp .claude/skills/har-analyze/SKILL.md .gemini/skills/har-analyze/SKILL.md
+```
+
+**Global install:**
+
+```bash
+mkdir -p ~/.gemini/skills/har-analyze
+cp .claude/skills/har-analyze/SKILL.md ~/.gemini/skills/har-analyze/SKILL.md
+```
+
+### Shared across all tools
+
+Since both Codex and Gemini recognize `.agents/skills/`, you can use a single location for both:
+
+```bash
+mkdir -p .agents/skills/har-analyze
+cp .claude/skills/har-analyze/SKILL.md .agents/skills/har-analyze/SKILL.md
+
+# Claude Code: symlink to its expected path
+mkdir -p .claude/skills
+ln -s ../../.agents/skills/har-analyze .claude/skills/har-analyze
+```
+
+| Tool | Skill directory | Install command |
+|---|---|---|
+| Claude Code | `.claude/skills/` | Already in repo |
+| Codex CLI | `.agents/skills/` | `mkdir -p .agents/skills/har-analyze && cp ...` |
+| Gemini CLI | `.gemini/skills/` or `.agents/skills/` | `mkdir -p .gemini/skills/har-analyze && cp ...` |
+
 ## License
 
 MIT
