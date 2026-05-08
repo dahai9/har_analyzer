@@ -7,47 +7,10 @@ description: Analyze HAR (HTTP Archive) files to understand API flows, debug net
 
 Analyze HAR files using the `har_analyzer` CLI tool.
 
-## Obtain the Binary
-
-Try these in order:
-
-### 1. Download from GitHub Releases (preferred)
+### install
 
 ```bash
-# Detect OS and arch
-OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-ARCH=$(uname -m)
-case "$ARCH" in
-  x86_64) ARCH="amd64" ;;
-  aarch64|arm64) ARCH="arm64" ;;
-esac
-
-# Map OS name
-case "$OS" in
-  linux) PLATFORM="linux" ;;
-  darwin) PLATFORM="macos" ;;
-esac
-
-# Download latest release
-curl -sL "https://github.com/<owner>/har_analyzer/releases/latest/download/har_analyzer-${PLATFORM}-${ARCH}" -o har_analyzer
-chmod +x har_analyzer
-```
-
-If the repo URL is known, use it. Otherwise ask the user for the release URL.
-
-### 2. Clone and build
-
-```bash
-git clone <repo_url> /tmp/har_analyzer
-cd /tmp/har_analyzer
-cargo build --release
-# binary at target/release/har_analyzer
-```
-
-### 3. cargo install
-
-```bash
-cargo install --git <repo_url>
+cargo install --git https://github.com/dahai9/har_analyzer
 ```
 
 ## Commands
