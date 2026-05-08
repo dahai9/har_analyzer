@@ -136,13 +136,22 @@ pub fn detail_md(id: usize, e: &Entry) -> String {
     out.push_str(&format!("- **Time**: {:.0} ms\n", e.time));
     out.push_str(&format!("- **Started**: {}\n", e.started_date_time));
     if let Some(ip) = &e.server_ip_address {
-        out.push_str(&format!("- **Server IP**: {ip}\n"));
+        if !ip.is_empty() {
+            out.push_str(&format!("- **Server IP**: {ip}\n"));
+        }
     }
     if !e.response.content.mime_type.is_empty() {
         out.push_str(&format!("- **Content-Type**: {}\n", e.response.content.mime_type));
     }
     if e.response.content.size >= 0 {
-        out.push_str(&format!("- **Body size**: {}\n", format_size(e.response.content.size)));
+        out.push_str(&format!("- **Body size**: {}", format_size(e.response.content.size)));
+        if e.response.content.compression > 0 {
+            out.push_str(&format!(" (compressed, saved {})", format_size(e.response.content.compression)));
+        }
+        out.push('\n');
+    }
+    if !e.response.redirect_url.is_empty() {
+        out.push_str(&format!("- **Redirect to**: {}\n", e.response.redirect_url));
     }
 
     // Timings
@@ -176,6 +185,23 @@ pub fn detail_md(id: usize, e: &Entry) -> String {
         out.push_str("| Name | Value |\n|------|-------|\n");
         for q in &e.request.query_string {
             out.push_str(&format!("| `{}` | `{}` |\n", q.name, q.value));
+        }
+    }
+
+    // Post data
+    if let Some(pd) = &e.request.post_data {
+        out.push_str("\n## Request Body\n\n");
+        out.push_str(&format!("- **Content-Type**: {}\n", pd.mime_type));
+        if let Some(text) = &pd.text {
+            out.push_str("\n```\n");
+            out.push_str(&truncate(text, BODY_TRUNCATE));
+            out.push_str("\n```\n");
+        }
+        if !pd.params.is_empty() {
+            out.push_str("\n| Param | Value |\n|-------|-------|\n");
+            for p in &pd.params {
+                out.push_str(&format!("| `{}` | `{}` |\n", p.name, truncate(&p.value, 200)));
+            }
         }
     }
 
@@ -218,6 +244,18 @@ pub fn detail_md(id: usize, e: &Entry) -> String {
 
 pub fn detail_json(id: usize, e: &Entry) -> String {
     let body = analyzer::decode_body(&e.response.content);
+    let post_data = e.request.post_data.as_ref().map(|pd| {
+        serde_json::json!({
+            "mime_type": pd.mime_type,
+            "text": pd.text.as_ref().map(|t| truncate(t, BODY_TRUNCATE)),
+            "params": pd.params.iter().map(|p| serde_json::json!({"name": p.name, "value": p.value})).collect::<Vec<_>>(),
+        })
+    });
+    let redirect_url = if e.response.redirect_url.is_empty() {
+        None
+    } else {
+        Some(&e.response.redirect_url)
+    };
     let v = serde_json::json!({
         "id": id,
         "method": e.request.method,
@@ -230,6 +268,8 @@ pub fn detail_json(id: usize, e: &Entry) -> String {
         "server_ip": e.server_ip_address,
         "content_type": e.response.content.mime_type,
         "body_size": e.response.content.size,
+        "compression": e.response.content.compression,
+        "redirect_url": redirect_url,
         "timings": {
             "dns": e.timings.dns,
             "connect": e.timings.connect,
@@ -241,10 +281,76 @@ pub fn detail_json(id: usize, e: &Entry) -> String {
         },
         "request_headers": e.request.headers.iter().map(|h| (h.name.clone(), serde_json::Value::String(h.value.clone()))).collect::<serde_json::Map<String, serde_json::Value>>(),
         "query_params": e.request.query_string.iter().map(|q| (q.name.clone(), serde_json::Value::String(q.value.clone()))).collect::<serde_json::Map<String, serde_json::Value>>(),
+        "post_data": post_data,
         "response_headers": e.response.headers.iter().map(|h| (h.name.clone(), serde_json::Value::String(h.value.clone()))).collect::<serde_json::Map<String, serde_json::Value>>(),
         "response_body": body.map(|b| truncate(&b, BODY_TRUNCATE)),
     });
     serde_json::to_string_pretty(&v).unwrap()
+}
+
+// ── headers ──
+
+pub fn headers_md(name: &str, entries: &[(usize, &Entry)]) -> String {
+    let mut out = String::new();
+    out.push_str(&format!("# Header: {name}\n\n"));
+    out.push_str("| # | Method | Status | Domain | Header Value |\n");
+    out.push_str("|---|--------|--------|--------|-------------|\n");
+    for (i, e) in entries {
+        let domain = analyzer::url_domain(&e.request.url);
+        let values: Vec<String> = e
+            .request
+            .headers
+            .iter()
+            .chain(e.response.headers.iter())
+            .filter(|h| h.name.to_lowercase().contains(&name.to_lowercase()))
+            .map(|h| format!("{}: {}", h.name, truncate(&h.value, 100)))
+            .collect();
+        for v in values {
+            out.push_str(&format!(
+                "| {i} | {} | {} | {domain} | {v} |\n",
+                e.request.method, e.response.status
+            ));
+        }
+    }
+    out
+}
+
+pub fn headers_json(name: &str, entries: &[(usize, &Entry)]) -> String {
+    let arr: Vec<_> = entries
+        .iter()
+        .flat_map(|(i, e)| {
+            let req_hits: Vec<_> = e
+                .request
+                .headers
+                .iter()
+                .filter(|h| h.name.to_lowercase().contains(&name.to_lowercase()))
+                .map(|h| {
+                    serde_json::json!({
+                        "id": i,
+                        "source": "request",
+                        "name": h.name,
+                        "value": h.value,
+                    })
+                })
+                .collect();
+            let resp_hits: Vec<_> = e
+                .response
+                .headers
+                .iter()
+                .filter(|h| h.name.to_lowercase().contains(&name.to_lowercase()))
+                .map(|h| {
+                    serde_json::json!({
+                        "id": i,
+                        "source": "response",
+                        "name": h.name,
+                        "value": h.value,
+                    })
+                })
+                .collect();
+            req_hits.into_iter().chain(resp_hits)
+        })
+        .collect();
+    serde_json::to_string_pretty(&arr).unwrap()
 }
 
 // ── domains ──

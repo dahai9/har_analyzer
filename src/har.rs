@@ -53,6 +53,20 @@ pub struct Request {
     pub query_string: Vec<QueryString>,
     pub http_version: String,
     pub url: String,
+    pub post_data: Option<PostData>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PostData {
+    pub mime_type: String,
+    pub text: Option<String>,
+    pub params: Vec<PostParam>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PostParam {
+    pub name: String,
+    pub value: String,
 }
 
 #[derive(Debug, Clone)]
@@ -74,6 +88,7 @@ pub struct Content {
     pub size: i64,
     pub mime_type: String,
     pub encoding: Option<String>,
+    pub compression: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -173,7 +188,32 @@ fn parse_content(v: &Value) -> Content {
         size: get_i64(v, "size"),
         mime_type: get_str(v, "mimeType"),
         encoding: v.get("encoding").and_then(|e| e.as_str()).map(|s| s.to_string()),
+        compression: get_i64(v, "compression"),
     }
+}
+
+fn parse_post_data(v: &Value) -> Option<PostData> {
+    if v.is_null() {
+        return None;
+    }
+    Some(PostData {
+        mime_type: get_str(v, "mimeType"),
+        text: v.get("text").and_then(|t| t.as_str()).map(|s| s.to_string()),
+        params: v
+            .get("params")
+            .and_then(|p| p.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|p| {
+                        Some(PostParam {
+                            name: p.get("name")?.as_str()?.to_string(),
+                            value: p.get("value").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+    })
 }
 
 fn parse_request(v: &Value) -> Option<Request> {
@@ -187,6 +227,7 @@ fn parse_request(v: &Value) -> Option<Request> {
         query_string: parse_query_string(v.get("queryString").unwrap_or(&Value::Null)),
         http_version: get_str(v, "httpVersion"),
         url: url.to_string(),
+        post_data: parse_post_data(v.get("postData").unwrap_or(&Value::Null)),
     })
 }
 

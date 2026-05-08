@@ -41,6 +41,9 @@ enum Commands {
         /// Filter by status code
         #[arg(short, long)]
         status: Option<u16>,
+        /// Filter by MIME type (substring match, e.g. "json", "image")
+        #[arg(short = 't', long)]
+        r#type: Option<String>,
         /// Max entries to show
         #[arg(short, long)]
         limit: Option<usize>,
@@ -64,6 +67,14 @@ enum Commands {
         #[arg(short, long)]
         limit: Option<usize>,
     },
+    /// Show requests containing a specific header name
+    Headers {
+        /// Header name to search (case-insensitive)
+        name: String,
+        /// Max entries to show
+        #[arg(short, long)]
+        limit: Option<usize>,
+    },
     /// Per-domain statistics
     Domains,
     /// Requests in chronological order
@@ -71,6 +82,12 @@ enum Commands {
         /// Max entries to show
         #[arg(short, long)]
         limit: Option<usize>,
+    },
+    /// Slowest requests sorted by duration
+    Slow {
+        /// Number of slow requests to show
+        #[arg(short, long, default_value = "10")]
+        limit: usize,
     },
 }
 
@@ -98,14 +115,20 @@ fn main() {
             domain,
             method,
             status,
+            r#type,
             limit,
         } => {
-            let filtered = analyzer::filter_entries(
+            let mut filtered = analyzer::filter_entries(
                 entries,
                 domain.as_deref(),
                 method.as_deref(),
                 *status,
             );
+            if let Some(t) = r#type {
+                filtered.retain(|(_, e)| {
+                    e.response.content.mime_type.to_lowercase().contains(&t.to_lowercase())
+                });
+            }
             let slice = match limit {
                 Some(n) => &filtered[..filtered.len().min(*n)],
                 None => &filtered,
@@ -147,6 +170,17 @@ fn main() {
                 OutputFormat::Json => output::list_json(slice),
             }
         }
+        Commands::Headers { name, limit } => {
+            let filtered = analyzer::search_headers(entries, name);
+            let slice = match limit {
+                Some(n) => &filtered[..filtered.len().min(*n)],
+                None => &filtered,
+            };
+            match cli.format {
+                OutputFormat::Markdown => output::headers_md(name, slice),
+                OutputFormat::Json => output::headers_json(name, slice),
+            }
+        }
         Commands::Domains => {
             let stats = analyzer::analyze_domains(entries);
             match cli.format {
@@ -165,6 +199,13 @@ fn main() {
             match cli.format {
                 OutputFormat::Markdown => output::timeline_md(slice),
                 OutputFormat::Json => output::timeline_json(slice),
+            }
+        }
+        Commands::Slow { limit } => {
+            let sorted = analyzer::sort_slow(entries, *limit);
+            match cli.format {
+                OutputFormat::Markdown => output::list_md(&sorted),
+                OutputFormat::Json => output::list_json(&sorted),
             }
         }
     };

@@ -176,8 +176,39 @@ pub fn search_entries<'a>(entries: &'a [Entry], keyword: &str) -> Vec<(usize, &'
                     .as_ref()
                     .map(|t| t.to_lowercase().contains(&kw))
                     .unwrap_or(false)
+                || e.request
+                    .post_data
+                    .as_ref()
+                    .and_then(|p| p.text.as_ref())
+                    .map(|t| t.to_lowercase().contains(&kw))
+                    .unwrap_or(false)
         })
         .collect()
+}
+
+pub fn search_headers<'a>(entries: &'a [Entry], name: &str) -> Vec<(usize, &'a Entry)> {
+    let name_lower = name.to_lowercase();
+    entries
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| {
+            e.request
+                .headers
+                .iter()
+                .any(|h| h.name.to_lowercase().contains(&name_lower))
+                || e
+                    .response
+                    .headers
+                    .iter()
+                    .any(|h| h.name.to_lowercase().contains(&name_lower))
+        })
+        .collect()
+}
+
+pub fn sort_slow<'a>(entries: &'a [Entry], limit: usize) -> Vec<(usize, &'a Entry)> {
+    let mut indexed: Vec<(usize, &Entry)> = entries.iter().enumerate().collect();
+    indexed.sort_by(|a, b| b.1.time.partial_cmp(&a.1.time).unwrap_or(std::cmp::Ordering::Equal));
+    indexed.into_iter().take(limit).collect()
 }
 
 pub fn decode_body(content: &crate::har::Content) -> Option<String> {

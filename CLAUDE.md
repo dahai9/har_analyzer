@@ -19,7 +19,7 @@ Use `cargo run -- <file> <subcommand>` for arbitrary files.
 - `src/har.rs` — HAR data structures. Parses `log.entries` as `Vec<serde_json::Value>` then deserializes each entry individually. Non-standard entries are skipped gracefully.
 - `src/analyzer.rs` — Analysis: overview stats, filtering, search, domain grouping, body decoding (gzip/base64).
 - `src/output.rs` — Markdown and JSON formatters for each subcommand.
-- `src/main.rs` — CLI definition with clap. Subcommands: overview, list, detail, errors, search, domains, timeline.
+- `src/main.rs` — CLI definition with clap. Subcommands: overview, list, detail, errors, search, headers, domains, timeline, slow.
 
 ## Key Design Decisions
 

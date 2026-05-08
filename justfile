@@ -45,6 +45,14 @@ domains fmt="markdown":
 timeline *ARGS:
     cargo run -- {{sample}} timeline {{ARGS}}
 
+# Slowest requests
+slow *ARGS:
+    cargo run -- {{sample}} slow {{ARGS}}
+
+# Search headers by name
+headers name *ARGS:
+    cargo run -- {{sample}} headers {{name}} {{ARGS}}
+
 # Clean build artifacts
 clean:
     cargo clean
